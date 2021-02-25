@@ -38,23 +38,20 @@ localrules: create_bed_windows, create_bam_list
 rule all:
     input:
         files_log,
-        "bam_list.txt",
-        "bedfiles/region_small_bins.bed",
-        # "var_calling/vcf.vcf.gz",
-        # "concat/complete_vcf.vcf.gz",
-        # "vcf/{bed}.vcf.gz"
-        # expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam"), samples=SAMPLES),
-        # expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam.bai"), samples=SAMPLES),
-        # expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG2.bam"), samples =SAMPLES),
-        # "chr_list.txt",
-        expand("concat/{chromosome}.vcf.gz", chromosome=CHROMOSOMES_LARGE),
-        "concat/small_chrs.vcf.gz"
+        # "bedfiles/region_small_bins.bed",
+        # expand("concat/{chromosome}.vcf.gz", chromosome=CHROMOSOMES_LARGE),
+        # "concat/small_chrs.vcf.gz",
+        # expand("bcftools_stats/stats_{chr}.txt", chr=CHROMOSOMES_LARGE),
+        # "bcftools_stats/stats_small_chrs.txt"
+        "concat/allchr.vcf.gz",
+        "concat/allchr_stats.txt",
 
 rule create_bed_windows:
     input:
         BED
     output:
-        bed = "bedfiles/region_small_bins.bed",
+        # bed = "bedfiles/region_small_bins.bed",
+        bed="create_bed_windows.done"
     message:
         "Rule {rule} processing"
     params:
@@ -63,8 +60,10 @@ rule create_bed_windows:
     shell:
         """
         module load bedtools
-        bedtools makewindows -b {input} -w {params.window_size} | awk '$3-$2 < {params.window_size}' | awk '{{print $0}}' >> {output.bed}
-        bedtools makewindows -b {input} -w {params.window_size} | awk '$3-$2 >= {params.window_size}' | awk '{{print $0 > "bedfiles/region_"$1"-"$2"-"$3".bed"}}'
+        # bedtools makewindows -b {input} -w {params.window_size} | awk '$3-$2 < {params.window_size}' | awk '{{print $0}}' >> {output.bed}
+        # bedtools makewindows -b {input} -w {params.window_size} | awk '$3-$2 >= {params.window_size}' | awk '{{print $0 > "bedfiles/region_"$1"-"$2"-"$3".bed"}}'
+        bedtools makewindows -b {input} -w {params.window_size} | awk '{{print $0 > "bedfiles/region_"$1"-"$2"-"$3".bed"}}'
+        touch {output}
         """
 
 
@@ -78,85 +77,13 @@ rule create_bam_list:
     shell:
         "ls {params.bam_dir}/processed_reads/*.bam > {output}"
 
-# rule create_chr_list:
-#     input:
-#         ASSEMBLY
-#     output:
-#         "chr_list.txt"
-#     message:
-#         "Rule {rule} processing "
-#     shell:
-#         """
-#         grep '>' {input} | awk '{{print substr($1,2); }}' > {output}
-#         """
-
-
-# rule add_readgroup_tag:
-#     input:
-#         os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.bam")
-#     output:
-#         os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam")
-#     message:
-#         "Rule {rule} processing"
-#     group:
-#         "RG"
-#     shell:
-#         "module load samtools && samtools addreplacerg --threads 12 -r ID:{wildcards.samples} -r SM:{wildcards.samples} -o {output} {input}"
-
-
-# rule add_readgroup_tag:
-#     input:
-#         expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.bam"), samples=SAMPLES)
-#     output:
-#         expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam"), samples =SAMPLES)
-#     message:
-#         "Rule {rule} processing"
-#     # resources:
-#     #     time="3:0:0"
-#     run:
-#         processed_files = os.listdir(os.path.join(MAPPING_DIR,"processed_reads/"))
-#         for file in input:
-#             samp_id = file.rsplit('/',1)[1]
-#             samp_id = samp_id.split(".")[0]
-#             processed_reads_path = os.path.join(MAPPING_DIR,"processed_reads", samp_id + ".sorted.RG.bam")
-#             if processed_reads_path not in processed_files:
-#                 # processed_reads_path = os.path.join(MAPPING_DIR,"processed_reads", samp_id + ".sorted.RG.bam")
-#                 shell("module load samtools && samtools addreplacerg --threads 12 -r ID:"+samp_id+" -r SM:"+samp_id+" -o "+processed_reads_path+ " "+ file)
-
-# rule index_RG:
-#     input:
-#         expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam"), samples =SAMPLES)
-#     output:
-#         expand(os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam.bai"), samples =SAMPLES),
-#         "index_RG.done"
-#     message:
-#         "Rule {rule} processing"
-#     run:
-#         for file in input:
-#             shell("module load samtools && samtools index -@ 16 "+file)
-        # shell("touch index_RG.done")
-
-# rule index_RG:
-#     input:
-#         rules.add_readgroup_tag.output
-#     output:
-#         os.path.join(MAPPING_DIR,"processed_reads/{samples}.sorted.RG.bam.bai")
-#     message:
-#         "Rule {rule} processing"
-#     group:
-#         "RG"
-#     shell:
-#         "module load samtools && samtools index -@ 16 {input}"
-
-
 
 BEDFILES2, = glob_wildcards("bedfiles/{bed}.bed")
-# print(BEDFILES2)
 rule run_freebayes:
     input:
         regions = "bedfiles/{bed}.bed",
         reference=ASSEMBLY,
-        bams= "bam_list.txt",
+        bams= rules.create_bam_list.output,
         # idx_done = "index_RG.done"
     output:
         "vcf/{bed}.vcf.gz"
@@ -178,17 +105,6 @@ rule run_freebayes:
         """
 
 
-
-# rule merge_vcf:
-#     input:
-#         expand("vcf/{bed}.vcf.gz", bed=BEDFILES2)
-#     output:
-#         "var_calling/vcf.vcf.gz"
-#     message:
-#         "Rule {rule} processing"
-#     shell:
-#         "module load bcftools && bcftools merge -Oz {input} > {output}"
-
 rule sort_index_vcf:
     input:
         rules.run_freebayes.output
@@ -198,54 +114,94 @@ rule sort_index_vcf:
     message:
         "Rule {rule} processing"
     shell:
-        """"
+        """
         module load bcftools samtools
         bcftools sort -Oz -m 2G {input} > {output.vcf}
         tabix -p vcf {output.vcf}
         """
 
-# rule index_vcf:
-#     input:
-#         rules.sort_vcf.output
+# rule concat_vcf_individual:
+#     input: 
+#         vcf = expand("sorted/{bed}.sorted.vcf.gz", bed = BEDFILES2),
+#         # chr_list = create_perchr_vcf("chr_list.txt")
 #     output:
-#          "sorted/{bed}.sorted.vcf.gz.tbi"
+#         vcf = "concat/{chromosome}.vcf.gz",
+#         idx = "concat/{chromosome}.vcf.gz.tbi"
 #     message:
 #         "Rule {rule} processing"
+#     group:
+#         'group'
 #     shell:
-#         "module load bcftools && tabix -p vcf {input}"
+#         """
+#         module load bcftools;
+#         bcftools concat --threads 12 --allow-overlaps --remove-duplicates -r {wildcards.chromosome} -Oz -o {output.vcf} {input.vcf}
+#         tabix -p vcf {output.vcf}
+#         """
 
-rule concat_vcf_individual:
-    input: 
+# rule concat_vcf_group:
+#     input: 
+#         vcf = expand("sorted/{bed}.sorted.vcf.gz", bed = BEDFILES2),
+#         regions = "small_chrs.txt"
+#     output:
+#         vcf = "concat/small_chrs.vcf.gz",
+#         idx = "concat/small_chrs.vcf.gz.tbi"
+#     message:
+#         "Rule {rule} processing"
+#     group:
+#         'group'
+#     shell:
+#         """
+#         module load bcftools;
+#         bcftools concat --threads 12 --allow-overlaps --remove-duplicates -R {input.regions} -Oz -o {output.vcf} {input.vcf}
+#         tabix -p vcf {output.vcf}
+#         """
+
+
+# rule bcftools_stats:
+#     input:
+#         "concat/{chr}.vcf.gz"
+#     output:
+#         "bcftools_stats/stats_{chr}.txt"
+#     message:
+#         "Rule {rule} processing"
+#     group:
+#         'group'
+#     shell:
+#         """
+#         module load bcftools
+#         sample_list=$(bcftools query -l {input})
+#         bcftools stats -S $sample_list > {output}
+#         """
+
+rule concat_vcf:
+    input:
         vcf = expand("sorted/{bed}.sorted.vcf.gz", bed = BEDFILES2),
-        # chr_list = create_perchr_vcf("chr_list.txt")
     output:
-        vcf = "concat/{chromosome}.vcf.gz",
-        idx = "concat/{chromosome}.vcf.gz.tbi"
+        vcf = "concat/allchr.vcf.gz",
+        idx = "concat/allchr.vcf.gz.tbi"
     message:
-        "Rule {rule} processing"
-    # params:
-    #     chr = chromosome
+        'Rule {rule} processing'
+    group:
+        'group'
     shell:
         """
         module load bcftools;
-        bcftools concat --threads 12 --allow-overlaps --remove-duplicates -r {wildcards.chromosome} -Oz -o {output.vcf} {input.vcf}
+        bcftools concat --threads 16 --allow-overlaps --remove-duplicates -Oz -o {output.vcf} {input.vcf}
         tabix -p vcf {output.vcf}
         """
 
-rule concat_vcf_group:
-    input: 
-        vcf = expand("sorted/{bed}.sorted.vcf.gz", bed = BEDFILES2),
-        regions = "small_chrs.txt"
+rule bcftools_stats:
+    input:
+        rules.concat_vcf.output.vcf
     output:
-        vcf = "concat/small_chrs.vcf.gz",
-        idx = "concat/small_chrs.vcf.gz.tbi"
+        "concat/allchr_stats.txt"
     message:
-        "Rule {rule} processing"
-    # params:
-    #     chr = chromosome
+        'Rule {rule} processing'
+    group:
+        'group'
     shell:
         """
-        module load bcftools;
-        bcftools concat --threads 12 --allow-overlaps --remove-duplicates -R {input.regions} -Oz -o {output.vcf} {input.vcf}
-        tabix -p vcf {output.vcf}
+        module load bcftools
+        sample_list=$(bcftools query -l {input})
+        bcftools stats -S $sample_list > {output}
         """
