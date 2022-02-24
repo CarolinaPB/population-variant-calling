@@ -1,67 +1,57 @@
-# snakemake-template
-Template directory for creating a snakemake pipeline
+# Population level variant calling
 
-## To use this repository as a template:
-Click the "use this template" button
+## First follow the instructions here
 
-## Other instructions
-Install `conda` if you don't have it
+[Step by step guide on how to use my pipelines](https://carolinapb.github.io/2021-06-23-how-to-run-my-pipelines/)  
+Click [here](https://github.com/CarolinaPB/snakemake-template/blob/master/Short%20introduction%20to%20Snakemake.pdf) for an introduction to Snakemake
 
-### Create conda environment
+## ABOUT
 
-Recommended - give the profile a name related to your pipeline (ex: polish-assembly)
+This is a pipeline that takes reads aligned to a genome (in `.bam` format) and performs variant calling with `Freebayes`. It uses VEP to annotate the resulting VCF, calculates statistics, and calculates and plots a PCA.
+
+#### Tools used
+
+
+- [Freebayes](https://github.com/freebayes/freebayes) - variant calling using short reads
+- [bcftools](https://samtools.github.io/bcftools/bcftools.html) - vcf statistics
+- [Plink](https://www.cog-genomics.org/plink/) - compute PCA
+- R - Plot PCA
+
+| ![DAG](https://github.com/CarolinaPB/pop-var-calling/blob/master/workflow.png) |
+|:--:|
+|*Pipeline workflow* |
+
+### Edit config.yaml with the paths to your files
 
 ```
-conda create --name <env> --file requirements.txt
+ASSEMBLY: /path/to/fasta
+MAPPING_DIR: /path/to/bams/dir
+PREFIX: <prefix>
+OUTDIR: /path/to/outdir
+SPECIES: <species>
+NUM_CHRS: <number of chromosomes>
 ```
 
-(by creating an environment from requirements.txt you'll be creating and environment that already has snakemake)
-### Activate environment
-```
-conda activate <env>
-```
+- ASSEMBLY - path to genome fasta file
+- MAPPING_DIR - path to directory with bam files to be used
+  - the pipeline will use all bam files in the directory, if you want to use a subset of those, create a file named `bam_list.txt` and add the path to the bam files you want to use. One path per line.
+- PREFIX -  prefix for the created files
+- OUTDIR - directory where snakemake will run and where the results will be written to  
+  If you want the results to be written to this directory (not to a new directory), open config.yaml and comment out `OUTDIR: /path/to/outdir`
+- SPECIES - species name to be used for VEP
+- NUM_CHRS - number of chromosomes for your species (necessary for plink). ex: 38
 
-### To deactivate the environment (if you want to leave the conda environment)
-```
-conda deactivate
-```
+## RESULTS
 
-### Create hpc config file ([good example](https://www.sichong.site/2020/02/25/snakemake-and-slurm-how-to-manage-workflow-with-resource-constraint-on-hpc/))
+The most important files are and directories are:  
 
-Necessary for snakemake to prepare and send jobs.   
-Recommended - give the profile a name related to this pipeline (ex: polish-assembly)
+- **<run_date>_files.txt** dated file with an overview of the files used to run the pipeline (for documentation purposes)
+- **results** directory that contains
+  - **variant_calling/final_VCF** directory with variant calling VCF files, as well as VCF stats
+    - {prefix}.vep.vcf.gz - final VCF file
+    - {prefix}.vep.vcf.gz.stats
+  - **PCA** PCA results and plot
+    - {prefix}.eigenvec and {prefix}.eigenval - file with PCA eigenvectors and eigenvalues, respectively
+    - {prefix}.pdf - PCA plot
 
-#### Start with creating the directory
-```
-mkdir -p ~/.config/snakemake/<profile name>
-```
-
-#### Add config.yaml to that directory and add the specifications:
-```
-jobs: 10
-cluster: "sbatch -t {resources.time_min} --mem={resources.mem_mb} -c {resources.cpus} --job-name={rule} --exclude=fat001,fat002,fat101,fat100 --output=logs_slurm/{rule}.out --error=logs_slurm/{rule}.err"
-default-resources: [time_min=180, cpus=16, mem_mb=16000]
-
-use-conda: true
-```
-(change the options between square brackets)
-
-## How to run
-
-First it's good to always make a dry run: shows if there are any problems with the rules and we can use it to look at the commands and verify that all the fields are in the correct place
-
-Dry run (prints execution plan and commands that will be run)
-```
-snakemake -np 
-```
-Run in the HPC 
-```
-snakemake --profile <profile name>
-```
-
-Other flags:
-- --forceall : run all the steps, even if it's not needed
-- --rerun-incomplete : rerun incomplete steps
-- -R [rulename] : run this specific rule
-- --max-jobs-per-second \<N> : sometimes there are some problems with the job timings/ many jobs being submitted at once so it's good to choose a low number
-
+The VCF files has been filtered for `QUAL > 20`. Freebayes is ran with parameters `--use-best-n-alleles 4 --min-base-quality 10 --min-alternate-fraction 0.2 --haplotype-length 0 --ploidy 2 --min-alternate-count 2`. For more details check the Snakefile.
