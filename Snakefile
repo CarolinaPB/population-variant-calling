@@ -18,7 +18,7 @@ SPECIES = config["SPECIES"]
 SAMPLES, = glob_wildcards(os.path.join(MAPPING_DIR, "{samples}.sorted.bam"))
 
 
-localrules: create_bed_windows, create_bam_list, create_file_log    
+localrules: create_bam_list, create_file_log    
 
 rule all:
     input:
@@ -47,6 +47,8 @@ rule var_calling_freebayes:
     params:
         chunksize=100000, # reference genome chunk size for parallelization (default: 100000)
         scripts_dir = os.path.join(workflow.basedir, "scripts")
+    group:
+        'group'
     shell:
         """
 module load freebayes bcftools vcflib python/2.7.15 samtools
@@ -70,8 +72,8 @@ rule run_vep:
         "envs/vep_dependencies.yaml"
     params:
         species = SPECIES
-    # group:
-    #     'calling'
+    group:
+        'group'
     shell:
         """
 module load samtools
