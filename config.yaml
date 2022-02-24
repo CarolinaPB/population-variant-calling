@@ -2,4 +2,5 @@ ASSEMBLY: /path/to/fasta
 MAPPING_DIR: /path/to/bams/dir
 PREFIX: <prefix>
 OUTDIR: /path/to/outdir
-SPECIES: <vep species>
+SPECIES: <species>
+NUM_CHRS: <number of chromosomes>

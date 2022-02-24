@@ -14,6 +14,7 @@ ASSEMBLY = config["ASSEMBLY"]
 MAPPING_DIR = config["MAPPING_DIR"]
 PREFIX = config["PREFIX"]
 SPECIES = config["SPECIES"]
+NUM_CHRS = config["NUM_CHRS"]
 
 SAMPLES, = glob_wildcards(os.path.join(MAPPING_DIR, "{samples}.sorted.bam"))
 
@@ -23,8 +24,8 @@ localrules: create_bam_list, create_file_log
 rule all:
     input:
         files_log,
-        f"{PREFIX}.eigenvec",
-        f"results/variant_calling/{PREFIX}.vcf.stats.txt"
+        f"results/PCA/{PREFIX}.pdf",
+        f"results/variant_calling/final_VCF/{PREFIX}.vep.vcf.stats"
 
         
 rule create_bam_list:
@@ -43,7 +44,7 @@ rule var_calling_freebayes:
         ref=ASSEMBLY,
         bam= rules.create_bam_list.output,
     output:
-        "results/variant_calling/{prefix}.vcf.gz"
+        temp("results/variant_calling/{prefix}.vcf.gz")
     params:
         chunksize=100000, # reference genome chunk size for parallelization (default: 100000)
         scripts_dir = os.path.join(workflow.basedir, "scripts")
@@ -63,9 +64,9 @@ rule run_vep:
     input:
         rules.var_calling_freebayes.output
     output:
-        vcf = 'results/final_VCF/{prefix}.smoove.square.vep.vcf.gz',
-        # warnings = "5_postprocessing/{prefix}.suqare.vep.vcf.gz_warnings.txt",
-        summary = "'results/final_VCF/{prefix}.smoove.square.vep.vcf.gz_summary.html"
+        vcf = 'results/final_VCF/{prefix}.vep.vcf.gz',
+        # warnings = "5_postprocessing/{prefix}.vcf.gz_warnings.txt",
+        summary = "results/final_VCF/{prefix}.vep.vcf.gz_summary.html"
     message:
         'Rule {rule} processing'
     conda:
@@ -100,7 +101,7 @@ rule bcftools_stats:
         # rules.concat_vcf.output.vcf
         rules.run_vep.output.vcf
     output:
-        "results/variant_calling/{prefix}.vcf.stats.txt"
+        "results/variant_calling/final_VCF/{prefix}.vep.vcf.stats"
     message:
         'Rule {rule} processing'
     group:
@@ -111,23 +112,62 @@ rule bcftools_stats:
         bcftools stats -s - {input} > {output}
         """
 
+# rule PCA:
+#     input:
+#         # rules.concat_vcf.output.vcf
+#         rules.run_vep.output.vcf
+#     output:
+#         "{prefix}.eigenvec"
+#     message:
+#         'Rule {rule} processing'
+#     params:
+#         prefix=PREFIX
+#     group:
+#         'group'
+#     shell:
+#         """
+#         module load R/3.6.2
+#         module load plink/1.9-180913
+
+#         plink --vcf {input} --pca --double-id --out {params.prefix} --chr-set 38 --allow-extra-chr
+#         Rscript scripts/basic_PCA.R {params.prefix}.eigenvec
+#         """
 rule PCA:
     input:
-        # rules.concat_vcf.output.vcf
-        rules.run_vep.output.vcf
+        vcf = rules.run_vep.output.vcf,
     output:
-        "{prefix}.eigenvec"
+        eigenvec = "results/PCA/{prefix}.eigenvec",
+        eigenval = "results/PCA/{prefix}.eigenval",
     message:
         'Rule {rule} processing'
     params:
-        prefix=PREFIX
+        prefix= os.path.join("results/PCA",PREFIX),
+        num_chrs = NUM_CHRS
     group:
         'group'
     shell:
         """
-        module load R/3.6.2
         module load plink/1.9-180913
+        plink --vcf {input.vcf} --pca --double-id --out {params.prefix} --chr-set {params.num_chrs} --allow-extra-chr --threads 8
+        """
 
-        plink --vcf {input} --pca --double-id --out {params.prefix} --chr-set 38 --allow-extra-chr
-        Rscript scripts/PCA.Rscript {params.prefix}.eigenvec
+rule plot_PCA:
+    input:
+        eigenvec = rules.PCA.output.eigenvec,
+        eigenval = rules.PCA.output.eigenval,
+    output:
+        "results/PCA/{prefix}.pdf"
+    message:
+        'Rule {rule} processing'
+    params:
+        rscript = os.path.join(workflow.basedir, "scripts/basic_PCA.R")
+    group:
+        'group'
+    shell:
+        """
+module load R/3.6.2
+echo $CONDA_PREFIX
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+echo $LD_LIBRARY_PATH
+Rscript {params.rscript} --eigenvec={input.eigenvec} --eigenval={input.eigenval} --output={output}
         """
