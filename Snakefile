@@ -1,38 +1,21 @@
-configfile: "config.yaml"
+# configfile: "config.yaml"
+from snakemake.utils import makedirs
 
-from glob import glob
-from Bio import SeqIO
 pipeline = "population-var-calling" # replace your pipeline's name
 
-workdir: config["OUTDIR"]
+if "OUTDIR" in config:
+    workdir: config["OUTDIR"]
+
+makedirs("logs_slurm")
 
 include: "rules/create_file_log.smk"
 
 ASSEMBLY = config["ASSEMBLY"]
-BED = config["BED"]
 MAPPING_DIR = config["MAPPING_DIR"]
 PREFIX = config["PREFIX"]
+SPECIES = config["SPECIES"]
 
-SAMPLES, = glob_wildcards(os.path.join(MAPPING_DIR, "processed_reads/{samples}.sorted.bam"))
-
-CHROMOSOMES_LARGE = []
-
-if not os.path.isfile("small_chrs.txt"):
-    with open("small_chrs.txt", "w") as small_chrs_file:
-        with open(ASSEMBLY) as assembly:
-            for record in SeqIO.FastaIO.FastaIterator(assembly): 
-                if record.id.endswith(".1"):
-                    small_chrs_file.write(record.id)
-                else:
-                    CHROMOSOMES_LARGE.append(record.id)
-else:
-    with open(ASSEMBLY) as assembly:
-        for record in SeqIO.FastaIO.FastaIterator(assembly): 
-            if record.id.endswith(".1"):
-                pass
-            else:
-                CHROMOSOMES_LARGE.append(record.id)
-
+SAMPLES, = glob_wildcards(os.path.join(MAPPING_DIR, "{samples}.sorted.bam"))
 
 
 localrules: create_bed_windows, create_bam_list, create_file_log    
@@ -40,33 +23,10 @@ localrules: create_bed_windows, create_bam_list, create_file_log
 rule all:
     input:
         files_log,
-        expand("concat/allchr_{prefix}.vcf.gz",prefix=PREFIX),
-        expand("concat/allchr_{prefix}_stats.txt", prefix = PREFIX),
-        expand("{prefix}.eigenvec", prefix=PREFIX)
+        f"{PREFIX}.eigenvec",
+        f"results/variant_calling/{PREFIX}.vcf.stats.txt"
+
         
-
-rule create_bed_windows:
-    input:
-        BED
-    output:
-        bed=temp("create_bed_windows.done") # make temp
-    message:
-        "Rule {rule} processing"
-    params:
-        # window_size = 10000000
-        window_size = 5000000
-    shell:
-        """
-        module load bedtools
-        bedtools makewindows -b {input} -w {params.window_size} | awk '{{print $0 > "bedfiles/region_"$1"-"$2"-"$3".bed"}}'
-        touch {output}
-        """
-
-# to run small bins in one go and big bins separately
-#  bedtools makewindows -b {input} -w {params.window_size} | awk '$3-$2 < {params.window_size}' | awk '{{print $0}}' >> {output.bed}
-# bedtools makewindows -b {input} -w {params.window_size} | awk '$3-$2 >= {params.window_size}' | awk '{{print $0 > "bedfiles/region_"$1"-"$2"-"$3".bed"}}'
-
-
 rule create_bam_list:
     output:
         temp("bam_list.txt")
@@ -75,79 +35,70 @@ rule create_bam_list:
     params:
         bam_dir = MAPPING_DIR
     shell:
-        "ls {params.bam_dir}processed_reads/*.bam > {output}"
+        "ls {params.bam_dir}/*.bam > {output}"
 
 
-BEDFILES2, = glob_wildcards("bedfiles/{bed}.bed")
-rule run_freebayes:
+rule var_calling_freebayes:
     input:
-        regions = "bedfiles/{bed}.bed",
-        reference=ASSEMBLY,
-        bams= rules.create_bam_list.output,
-        # idx_done = "index_RG.done"
+        ref=ASSEMBLY,
+        bam= rules.create_bam_list.output,
     output:
-        vcf="vcf/{bed}.vcf.gz"
-        # idx=temp("vcf/{bed}.vcf.gz.tbi")
-    message:
-        "Rule {rule} processing"
-    group:
-        'group'
+        "results/variant_calling/{prefix}.vcf.gz"
+    params:
+        chunksize=100000, # reference genome chunk size for parallelization (default: 100000)
+        scripts_dir = os.path.join(workflow.basedir, "scripts")
     shell:
         """
-        module load freebayes vcflib bcftools samtools
-
-        freebayes --use-best-n-alleles 4 \
-        -f {input.reference} \
-        --bam-list {input.bams} \
-        --targets {input.regions} \
-        --min-base-quality 20 \
-        --min-mapping-quality 30 \
-        --min-alternate-fraction 0.2 \
-        --haplotype-length 0 | \
-        vcffilter -f 'QUAL > 20' | bgzip -c > {output.vcf}
-
-        tabix -p vcf {output.vcf}
+module load freebayes bcftools vcflib python/2.7.15 samtools
+{params.scripts_dir}/freebayes-parallel.sh <({params.scripts_dir}/fasta_generate_regions.py {input.ref}.fai {params.chunksize}) 2 \
+-f {input.ref} \
+--use-best-n-alleles 4 --min-base-quality 10 --min-alternate-fraction 0.2 --haplotype-length 0 --ploidy 2 --min-alternate-count 2 \
+-L {input.bam} | vcffilter -f 'QUAL > 20' {input} | bgzip -c > {output}
+tabix -p vcf {output}
         """
 
-#remove rule and change paths of next rules (remove the "sorted" dir)
-# rule sort_index_vcf:
-#     input:
-#         rules.run_freebayes.output.vcf
-#     output:
-#         vcf = temp("sorted/{bed}.sorted.vcf.gz"),
-#         idx = temp("sorted/{bed}.sorted.vcf.gz.tbi")
-#     message:
-#         "Rule {rule} processing"
-#     shell:
-#         """
-#         module load bcftools samtools
-#         bcftools sort -Oz -m 2G {input} > {output.vcf}
-#         tabix -p vcf {output.vcf}
-#         """
-
-rule concat_vcf:
+rule run_vep:
     input:
-        # vcf = expand("sorted/{bed}.sorted.vcf.gz", bed = BEDFILES2),
-        vcf = expand("vcf/{bed}.vcf.gz", bed=BEDFILES2)
+        rules.var_calling_freebayes.output
     output:
-        vcf = "concat/allchr_{prefix}.vcf.gz",
-        idx = "concat/allchr_{prefix}.vcf.gz.tbi"
+        vcf = 'results/final_VCF/{prefix}.smoove.square.vep.vcf.gz',
+        # warnings = "5_postprocessing/{prefix}.suqare.vep.vcf.gz_warnings.txt",
+        summary = "'results/final_VCF/{prefix}.smoove.square.vep.vcf.gz_summary.html"
     message:
         'Rule {rule} processing'
-    group:
-        'group'
+    conda:
+        "envs/vep_dependencies.yaml"
+    params:
+        species = SPECIES
+    # group:
+    #     'calling'
     shell:
         """
-        module load bcftools;
-        bcftools concat --threads 16 --allow-overlaps --remove-duplicates -Oz -o {output.vcf} {input.vcf}
-        tabix -p vcf {output.vcf}
+module load samtools
+/cm/shared/apps/SHARED/ensembl-vep/vep -i {input} \
+--format vcf \
+--buffer_size 5000 \
+--offline \
+--dir /lustre/nobackup/SHARED/cache/ \
+--species {params.species} \
+--vcf \
+--force_overwrite \
+-o {output.vcf} \
+--fork 1 \
+--compress_output bgzip \
+--canonical \
+--gene_phenotype \
+--regulatory \
+--numbers \
+--symbol
         """
 
 rule bcftools_stats:
     input:
-        rules.concat_vcf.output.vcf
+        # rules.concat_vcf.output.vcf
+        rules.run_vep.output.vcf
     output:
-        "concat/allchr_{prefix}_stats.txt"
+        "results/variant_calling/{prefix}.vcf.stats.txt"
     message:
         'Rule {rule} processing'
     group:
@@ -160,7 +111,8 @@ rule bcftools_stats:
 
 rule PCA:
     input:
-        rules.concat_vcf.output.vcf
+        # rules.concat_vcf.output.vcf
+        rules.run_vep.output.vcf
     output:
         "{prefix}.eigenvec"
     message:
