@@ -1,9 +1,5 @@
-# # 08/02/2021
-# ASSEMBLY: "/lustre/nobackup/WUR/ABGC/shared/public_data_store/genomes/chicken/Ensembl95/Gallus_gallus.GRCg6a.dna.toplevel.fa"
-# BED: /lustre/nobackup/WUR/ABGC/shared/Chicken/Africa/mapping/Gallus_gallus.GRCg6a.bed
-# MAPPING_DIR: /lustre/nobackup/WUR/ABGC/shared/Chicken/Africa/mapping
-
-# 12/02/2021
-ASSEMBLY: "/lustre/nobackup/WUR/ABGC/shared/public_data_store/genomes/chicken/Ensembl95/Gallus_gallus.GRCg6a.dna.toplevel.fa"
-BED: /lustre/nobackup/WUR/ABGC/shared/Chicken/Africa/mapping/Gallus_gallus.GRCg6a.bed
-MAPPING_DIR: /lustre/nobackup/WUR/ABGC/shared/Chicken/Africa/mapping_results/
+ASSEMBLY: /path/to/fasta
+MAPPING_DIR: /path/to/bams/dir
+PREFIX: <prefix>
+OUTDIR: /path/to/outdir
+SPECIES: <vep species>
