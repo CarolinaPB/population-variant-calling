@@ -1,7 +1,7 @@
 # configfile: "config.yaml"
 from snakemake.utils import makedirs
 
-pipeline = "population-var-calling" # replace your pipeline's name
+pipeline = "population-var-calling"
 
 if "OUTDIR" in config:
     workdir: config["OUTDIR"]
@@ -25,7 +25,7 @@ rule all:
     input:
         files_log,
         f"results/PCA/{PREFIX}.pdf",
-        f"results/variant_calling/final_VCF/{PREFIX}.vep.vcf.stats"
+        f"results/final_VCF/{PREFIX}.vep.vcf.stats"
 
         
 rule create_bam_list:
@@ -44,7 +44,8 @@ rule var_calling_freebayes:
         ref=ASSEMBLY,
         bam= rules.create_bam_list.output,
     output:
-        temp("results/variant_calling/{prefix}.vcf.gz")
+        temp("results/variant_calling/{prefix}.vcf.gz"),
+        temp("results/variant_calling/{prefix}.vcf.gz.tbi")
     params:
         chunksize=100000, # reference genome chunk size for parallelization (default: 100000)
         scripts_dir = os.path.join(workflow.basedir, "scripts")
@@ -65,7 +66,7 @@ rule run_vep:
         rules.var_calling_freebayes.output
     output:
         vcf = 'results/final_VCF/{prefix}.vep.vcf.gz',
-        # warnings = "5_postprocessing/{prefix}.vcf.gz_warnings.txt",
+        warnings = "results/final_VCF/{prefix}.vcf.gz_warnings.txt",
         summary = "results/final_VCF/{prefix}.vep.vcf.gz_summary.html"
     message:
         'Rule {rule} processing'
@@ -96,12 +97,25 @@ module load samtools
 --symbol
         """
 
-rule bcftools_stats:
+rule index_vcf:
     input:
-        # rules.concat_vcf.output.vcf
         rules.run_vep.output.vcf
     output:
-        "results/variant_calling/final_VCF/{prefix}.vep.vcf.stats"
+        'results/final_VCF/{prefix}.vep.vcf.gz.tbi'
+    message:
+        'Rule {rule} processing'
+    shell:
+        """
+module load samtools
+tabix -p vcf {input}
+        """
+
+rule bcftools_stats:
+    input:
+        vcf = rules.run_vep.output.vcf,
+        idx = rules.index_vcf.output
+    output:
+        "results/final_VCF/{prefix}.vep.vcf.stats"
     message:
         'Rule {rule} processing'
     group:
@@ -109,29 +123,10 @@ rule bcftools_stats:
     shell:
         """
         module load bcftools
-        bcftools stats -s - {input} > {output}
+        bcftools stats -s - {input.vcf} > {output}
         """
 
-# rule PCA:
-#     input:
-#         # rules.concat_vcf.output.vcf
-#         rules.run_vep.output.vcf
-#     output:
-#         "{prefix}.eigenvec"
-#     message:
-#         'Rule {rule} processing'
-#     params:
-#         prefix=PREFIX
-#     group:
-#         'group'
-#     shell:
-#         """
-#         module load R/3.6.2
-#         module load plink/1.9-180913
 
-#         plink --vcf {input} --pca --double-id --out {params.prefix} --chr-set 38 --allow-extra-chr
-#         Rscript scripts/basic_PCA.R {params.prefix}.eigenvec
-#         """
 rule PCA:
     input:
         vcf = rules.run_vep.output.vcf,
