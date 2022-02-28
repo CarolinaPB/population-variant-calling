@@ -14,7 +14,7 @@ option_list = list(
   make_option(c("-v", "--eigenval"), type="character", default=NULL, 
               help="plink eigenval file", metavar="character"),
   make_option(c("-o", "--output"), type="character", default=NULL, 
-              help="output PCA pdf", metavar="character"),
+              help="output PCA pdf", metavar="character")
   # make_option(c("-s", "--sample_list"), type="character", default=NULL, 
   #             help="sample list", metavar="character")
 ); 
