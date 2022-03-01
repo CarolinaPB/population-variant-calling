@@ -7,10 +7,9 @@ Click [here](https://github.com/CarolinaPB/snakemake-template/blob/master/Short%
 
 ## ABOUT
 
-This is a pipeline that takes reads aligned to a genome (in `.bam` format) and performs variant calling with `Freebayes`. It uses VEP to annotate the resulting VCF, calculates statistics, and calculates and plots a PCA.
+This is a pipeline that takes reads aligned to a genome (in `.bam` format) and performs population level variant calling with `Freebayes`. It uses VEP to annotate the resulting VCF, calculates statistics, and calculates and plots a PCA.
 
 #### Tools used
-
 
 - [Freebayes](https://github.com/freebayes/freebayes) - variant calling using short reads
 - [bcftools](https://samtools.github.io/bcftools/bcftools.html) - vcf statistics
@@ -23,7 +22,7 @@ This is a pipeline that takes reads aligned to a genome (in `.bam` format) and p
 
 ### Edit config.yaml with the paths to your files
 
-```
+```yaml
 ASSEMBLY: /path/to/fasta
 MAPPING_DIR: /path/to/bams/dir
 PREFIX: <prefix>
@@ -34,7 +33,13 @@ NUM_CHRS: <number of chromosomes>
 
 - ASSEMBLY - path to genome fasta file
 - MAPPING_DIR - path to directory with bam files to be used
-  - the pipeline will use all bam files in the directory, if you want to use a subset of those, create a file named `bam_list.txt` and add the path to the bam files you want to use. One path per line.
+  - the pipeline will use all bam files in the directory, if you want to use a subset of those, create a file named `bam_list.txt` that contains the paths to the bam files you want to use. One path per line.
+
+```text
+/path/to/file.bam
+/path/to/file2.bam
+```
+
 - PREFIX -  prefix for the created files
 - OUTDIR - directory where snakemake will run and where the results will be written to  
   If you want the results to be written to this directory (not to a new directory), open config.yaml and comment out `OUTDIR: /path/to/outdir`
@@ -47,11 +52,11 @@ The most important files are and directories are:
 
 - **<run_date>_files.txt** dated file with an overview of the files used to run the pipeline (for documentation purposes)
 - **results** directory that contains
-  - **variant_calling/final_VCF** directory with variant calling VCF files, as well as VCF stats
+  - **final_VCF** directory with variant calling VCF files, as well as VCF stats
     - {prefix}.vep.vcf.gz - final VCF file
     - {prefix}.vep.vcf.gz.stats
   - **PCA** PCA results and plot
     - {prefix}.eigenvec and {prefix}.eigenval - file with PCA eigenvectors and eigenvalues, respectively
     - {prefix}.pdf - PCA plot
 
-The VCF files has been filtered for `QUAL > 20`. Freebayes is ran with parameters `--use-best-n-alleles 4 --min-base-quality 10 --min-alternate-fraction 0.2 --haplotype-length 0 --ploidy 2 --min-alternate-count 2`. For more details check the Snakefile.
+The VCF file has been filtered for `QUAL > 20`. Freebayes is ran with parameters `--use-best-n-alleles 4 --min-base-quality 10 --min-alternate-fraction 0.2 --haplotype-length 0 --ploidy 2 --min-alternate-count 2`. These parameters can be changed in the Snakefile.
