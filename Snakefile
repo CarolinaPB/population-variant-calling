@@ -1,4 +1,4 @@
-# configfile: "config.yaml"
+configfile: "config.yaml"
 from snakemake.utils import makedirs
 
 pipeline = "population-var-calling"
@@ -104,6 +104,8 @@ rule index_vcf:
         'results/final_VCF/{prefix}.vep.vcf.gz.tbi'
     message:
         'Rule {rule} processing'
+    group:
+        'group'
     shell:
         """
 module load samtools
