@@ -1,4 +1,4 @@
-# configfile: "config.yaml"
+configfile: "config.yaml"
 from snakemake.utils import makedirs
 
 pipeline = "population-var-calling"
