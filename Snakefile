@@ -1,4 +1,4 @@
-configfile: "config.yaml"
+# configfile: "config.yaml"
 from snakemake.utils import makedirs
 
 pipeline = "population-var-calling"
@@ -19,13 +19,13 @@ NUM_CHRS = config["NUM_CHRS"]
 SAMPLES, = glob_wildcards(os.path.join(MAPPING_DIR, "{samples}.sorted.bam"))
 
 
-localrules: create_bam_list, create_file_log    
+localrules: create_bam_list, create_file_log, bcftools_stats, plot_PCA, PCA
 
 rule all:
     input:
         files_log,
         f"results/PCA/{PREFIX}.pdf",
-        f"results/final_VCF/{PREFIX}.vep.vcf.stats"
+        f"results/final_VCF/{PREFIX}.vep.vcf.stats",
 
         
 rule create_bam_list:
@@ -44,8 +44,8 @@ rule var_calling_freebayes:
         ref=ASSEMBLY,
         bam= rules.create_bam_list.output,
     output:
-        temp("results/variant_calling/{prefix}.vcf.gz"),
-        temp("results/variant_calling/{prefix}.vcf.gz.tbi")
+        vcf = temp("results/variant_calling/{prefix}.vcf.gz"),
+        idx = temp("results/variant_calling/{prefix}.vcf.gz.tbi")
     params:
         chunksize=100000, # reference genome chunk size for parallelization (default: 100000)
         scripts_dir = os.path.join(workflow.basedir, "scripts")
@@ -57,13 +57,13 @@ module load freebayes bcftools vcflib python/2.7.15 samtools
 {params.scripts_dir}/freebayes-parallel.sh <({params.scripts_dir}/fasta_generate_regions.py {input.ref}.fai {params.chunksize}) 2 \
 -f {input.ref} \
 --use-best-n-alleles 4 --min-base-quality 10 --min-alternate-fraction 0.2 --haplotype-length 0 --ploidy 2 --min-alternate-count 2 \
--L {input.bam} | vcffilter -f 'QUAL > 20' {input} | bgzip -c > {output}
-tabix -p vcf {output}
+-L {input.bam} | vcffilter -f 'QUAL > 20' | bgzip -c > {output.vcf}
+tabix -p vcf {output.vcf}
         """
 
 rule run_vep:
     input:
-        rules.var_calling_freebayes.output
+        rules.var_calling_freebayes.output.vcf
     output:
         vcf = 'results/final_VCF/{prefix}.vep.vcf.gz',
         warnings = "results/final_VCF/{prefix}.vcf.gz_warnings.txt",
@@ -133,6 +133,8 @@ rule PCA:
     output:
         eigenvec = "results/PCA/{prefix}.eigenvec",
         eigenval = "results/PCA/{prefix}.eigenval",
+        log = "results/PCA/{prefix}.log",
+        nosex = "results/PCA/{prefix}.nosex",
     message:
         'Rule {rule} processing'
     params:
