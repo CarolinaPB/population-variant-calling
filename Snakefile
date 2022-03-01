@@ -30,7 +30,7 @@ rule all:
         
 rule create_bam_list:
     output:
-        temp("bam_list.txt")
+        "bam_list.txt"
     message:
         "Rule {rule} processing"
     params:
