@@ -7,7 +7,7 @@ Click [here](https://github.com/CarolinaPB/snakemake-template/blob/master/Short%
 
 ## ABOUT
 
-This is a pipeline that takes reads aligned to a genome (in `.bam` format) and performs population level variant calling with `Freebayes`. It uses VEP to annotate the resulting VCF, calculates statistics, and calculates and plots a PCA.
+This is a pipeline that takes short reads aligned to a genome (in `.bam` format) and performs population level variant calling with `Freebayes`. It uses VEP to annotate the resulting VCF, calculates statistics, and calculates and plots a PCA.
 
 #### Tools used
 
