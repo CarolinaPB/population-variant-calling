@@ -1,6 +1,11 @@
 configfile: "config.yaml"
 from snakemake.utils import makedirs
 
+#################################
+# author: Carolina Pita Barros  #
+# carolina.pitabarros@wur.nl    #
+#################################
+
 pipeline = "population-var-calling"
 
 if "OUTDIR" in config:
