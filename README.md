@@ -9,6 +9,13 @@ Click [here](https://github.com/CarolinaPB/snakemake-template/blob/master/Short%
 
 This is a pipeline that takes short reads aligned to a genome (in `.bam` format) and performs population level variant calling with `Freebayes`. It uses VEP to annotate the resulting VCF, calculates statistics, and calculates and plots a PCA.
 
+It was developed to work with the results of [this population mapping pipeline](https://github.com/CarolinaPB/population-mapping). There are a few `Freebayes` requirements that you need to take into account if you don't use the mapping pipeline mentioned above to map your reads. You should make sure that:
+- Alignments have read groups
+- Alignments are sorted
+- Duplicates are marked
+
+See [here](https://github.com/freebayes/freebayes#calling-variants-from-fastq-to-vcf) for more details. 
+
 #### Tools used
 
 - [Freebayes](https://github.com/freebayes/freebayes) - variant calling using short reads
@@ -48,7 +55,7 @@ NUM_CHRS: <number of chromosomes>
 
 ## RESULTS
 
-The most important files are and directories are:  
+The most important files and directories are:  
 
 - **<run_date>_files.txt** dated file with an overview of the files used to run the pipeline (for documentation purposes)
 - **results** directory that contains
