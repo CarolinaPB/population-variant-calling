@@ -38,7 +38,8 @@ SPECIES: <species>
 NUM_CHRS: <number of chromosomes>
 ```
 
-- ASSEMBLY - path to genome fasta file
+- ASSEMBLY - path to genome fasta file. This file should not be compressed and should be indexed.
+  - you can decompress with `gunzip -d <fasta>` and index with `samtools faidx <fasta>`
 - MAPPING_DIR - path to directory with bam files to be used
   - the pipeline will use all bam files in the directory, if you want to use a subset of those, create a file named `bam_list.txt` that contains the paths to the bam files you want to use. One path per line.
 
